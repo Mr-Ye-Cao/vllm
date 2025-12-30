@@ -4,6 +4,7 @@
 """BAGEL processor for image and text inputs."""
 
 from transformers import AutoProcessor
+from transformers.feature_extraction_utils import BatchFeature
 from transformers.image_utils import ImageInput
 from transformers.processing_utils import ProcessorMixin
 from transformers.tokenization_utils_base import PreTokenizedInput, TextInput
@@ -43,13 +44,19 @@ class BagelProcessor(ProcessorMixin):
 
         text_inputs = self.tokenizer(text, **kwargs) if text is not None else None
 
+        # Always return BatchFeature for compatibility with vLLM's
+        # multimodal processing pipeline
         if pixel_values is not None and text_inputs is not None:
-            text_inputs["pixel_values"] = pixel_values["pixel_values"]
-            return text_inputs
+            # Combine text and image inputs into BatchFeature
+            combined = dict(text_inputs)
+            combined["pixel_values"] = pixel_values["pixel_values"]
+            return BatchFeature(combined)
         elif pixel_values is not None:
-            return pixel_values
+            return pixel_values  # Already a BatchFeature from image_processor
+        elif text_inputs is not None:
+            return BatchFeature(dict(text_inputs))
         else:
-            return text_inputs
+            return BatchFeature({})
 
     def batch_decode(self, *args, **kwargs):
         """
